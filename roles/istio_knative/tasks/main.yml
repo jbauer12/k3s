@@ -1,0 +1,50 @@
+- name: Install cert-manager
+  become: true
+  command: kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.0/cert-manager.yaml
+
+- name: Apply Knative Serving CRDs
+  become: true
+  command: kubectl apply -f https://github.com/knative/serving/releases/download/knative-v1.13.1/serving-crds.yaml
+
+- name: Apply Knative Serving Core
+  become: true
+  command: kubectl apply -f https://github.com/knative/serving/releases/download/knative-v1.13.1/serving-core.yaml
+
+- name: Apply Knative Net Istio
+  become: true
+  command: kubectl apply -l knative.dev/crd-install=true -f https://github.com/knative/net-istio/releases/download/knative-v1.13.1/istio.yaml
+
+- name: Apply Istio
+  become: true
+  command: kubectl apply -f https://github.com/knative/net-istio/releases/download/knative-v1.13.1/istio.yaml
+
+
+- name: Wait for Knative Serving Pods
+  shell: |
+    kubectl wait --for=condition=Ready pod -l app=webhook -n knative-serving --timeout=120s
+  register: result
+  until: result.rc == 0
+  retries: 5
+  delay: 30
+
+- name: Apply Istio-Net
+  become: true
+  command: kubectl apply -f https://github.com/knative/net-istio/releases/download/knative-v1.13.1/net-istio.yaml
+
+- name: check Ingress IP
+  become: true
+  command: kubectl --namespace istio-system get service istio-ingressgateway
+  register: ingress_ip_result
+
+- name: Print Ingress IP Result
+  debug:
+    var: ingress_ip_result.stdout_lines
+
+- name: MagicDNS Configuration
+  become: true
+  command: kubectl apply -f https://github.com/knative/serving/releases/download/knative-v1.13.2/serving-default-domain.yaml
+
+- name: Disable Traefik Load Balancer
+  become: true
+  command: kubectl delete svc traefik -n kube-system
+  ignore_errors: yes

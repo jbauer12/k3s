@@ -1,0 +1,132 @@
+---
+- name: create ArgoCD namespace
+  command: kubectl create namespace argocd
+  become: true
+  ignore_errors: yes
+  
+
+
+- name: install ArgoCD
+  command: kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  become: true
+  ignore_errors: yes
+
+
+- name: download ArgoCD binary
+  command: curl -sSL -o argocd-linux-arm64 https://github.com/argoproj/argo-cd/releases/download/v2.11.7/argocd-linux-arm64
+  args:
+    chdir: /tmp
+    creates: /tmp/argocd-linux-arm64
+  become: true
+
+- name: install ArgoCD binary
+  command: install -m 555 /tmp/argocd-linux-arm64 /usr/local/bin/argocd
+  args:
+    chdir: /tmp
+  become: true
+
+#- name: port-forward
+#  command: kubectl port-forward svc/argocd-server -n argocd 8080:443
+#  async: 1000
+#  poll: 0
+#  become: true
+#  ignore_errors: yes
+#  register: port_forward
+
+- name: Apply ArgoCD Application
+  shell: |
+    kubectl apply -n argocd -f - <<EOF
+    apiVersion: argoproj.io/v1alpha1
+    kind: Application
+    metadata:
+      name: myapp-argo-application
+      namespace: argocd
+    spec:
+      project: default
+      source:
+        repoURL: "{{ repo_link }}"
+        targetRevision: HEAD
+        path: dev
+      destination: 
+        server: https://kubernetes.default.svc
+        namespace: kserve-test
+      syncPolicy:
+        syncOptions:
+        - CreateNamespace=true
+        automated:
+          selfHeal: true
+          prune: true
+    EOF
+  args:
+    executable: /bin/bash
+  register: result
+  ignore_errors: yes
+
+- name: Ingress Rules
+  shell: |
+    kubectl apply -f - <<EOF
+    apiVersion: networking.istio.io/v1alpha3
+    kind: Gateway
+    metadata:
+      name: argocd-gateway
+      namespace: argocd
+    spec:
+      selector:
+        istio: ingressgateway # Verwenden Sie den Istio-Ingress-Gateway-Controller
+      servers:
+      - port:
+          number: 80
+          name: http
+          protocol: HTTP
+        hosts:
+        - "argocd.bauerbrueder.com" # Ersetzen Sie dies durch Ihren tatsächlichen Hostnamen
+    EOF
+
+- name: VirtualService Definition
+  shell: |
+    kubectl apply -f - <<EOF
+    apiVersion: networking.istio.io/v1alpha3
+    kind: VirtualService
+    metadata:
+      name: argocd
+      namespace: argocd
+    spec:
+      hosts:
+      - "argocd.bauerbrueder.com" # Ersetzen Sie dies durch Ihren tatsächlichen Hostnamen
+      gateways:
+      - argocd-gateway
+      http:
+      - match:
+        - uri:
+            prefix: / # Leitet alle Anfragen weiter
+        route:
+        - destination:
+            host: argocd-server.argocd.svc.cluster.local
+            port:
+              number: 80
+    EOF
+
+- name: Get Password
+  command: kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" 
+  register: argocd_password
+  ignore_errors: yes
+
+- name: Print ArgoCD Password
+  debug:
+    var: argocd_password.stdout
+  ignore_errors: yes
+
+- name: Disable TLS
+  shell: |
+    kubectl apply -f - <<EOF
+    apiVersion: v1
+    data: 
+      server.insecure: "true"
+    kind: ConfigMap
+    metadata:
+      labels:
+        app.kubernetes.io/name: argocd-cmd-params-cm
+        app.kubernetes.io/part-of: argocd
+      name: argocd-cmd-params-cm
+      namespace: argocd
+    EOF

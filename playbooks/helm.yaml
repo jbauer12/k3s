@@ -1,0 +1,6 @@
+---
+- name: Installing Prometheus and Grafana for monitoring
+  hosts: server
+  become: true
+  roles:
+    - role: prometheus_grafana

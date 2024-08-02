@@ -1,0 +1,63 @@
+- name: Install Kserve
+  become: true
+  command: kubectl apply -f https://github.com/kserve/kserve/releases/download/v0.12.0/kserve.yaml
+
+- name: Install Kserve cluster resources
+  become: true
+  command: kubectl apply -f https://github.com/kserve/kserve/releases/download/v0.12.0/kserve-cluster-resources.yaml
+  ignore_errors: yes
+  retries: 5
+  delay: 15
+
+#- name: install Knative eventing
+#  become: true
+ # command: kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.13.5/eventing-crds.yaml
+
+#- #name: install Knative eventing
+ # become: true
+  #command: kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.13.5/eventing-core.yaml
+
+#- name: Install Default Channel messaging Layer 
+#  become: true
+#  command: kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.13.5/in-memory-channel.yaml
+
+
+#- name: Define InMemoryChannel 
+#  shell: |
+#    kubectl apply -f - <<EOF
+#    apiVersion: v1
+#    kind: ConfigMap
+#    metadata:
+#      name: default-ch-webhook
+#      namespace: knative-eventing
+#      labels:
+#        eventing.knative.dev/release: devel
+#        app.kubernetes.io/version: devel
+#        app.kubernetes.io/part-of: knative-eventing
+#    data:
+#      default-ch-config: |
+#        clusterDefault:
+#          apiVersion: messaging.knative.dev/v1
+#          kind: InMemoryChannel
+#        namespaceDefaults:
+#          some-namespace:
+#            apiVersion: messaging.knative.dev/v1
+#            kind: InMemoryChannel
+#    EOF
+#  args:
+#    executable: /bin/bash
+#  register: result
+#  ignore_errors: yes
+
+#- name: Install Kafka and Broker
+#  become: true
+#  command: kubectl apply -f https://github.com/knative-extensions/eventing-kafka-broker/releases/download/knative-v1.13.10/eventing-kafka-controller.yaml
+
+#- name: Install Kafka and Broker
+#  become: true
+#  command: kubectl apply -f https://github.com/knative-extensions/eventing-kafka-broker/releases/download/knative-v1.13.10/eventing-kafka-channel.yaml
+
+#- name: Install Kafka and Broker
+#  become: true
+#  command: kubectl apply -f https://github.com/knative/eventing/releases/download/knative-v1.13.5/mt-channel-broker.yaml
+

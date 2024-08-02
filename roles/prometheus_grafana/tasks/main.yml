@@ -1,0 +1,68 @@
+
+
+- name: Install helm
+  become: true
+  command: snap install helm --classic
+  ignore_errors: yes
+
+- name: Add prometheus-community repo to helm
+  become: true
+  command: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  ignore_errors: yes
+
+- name: Add stable repo to helm
+  become: true
+  command: helm repo add stable https://charts.helm.sh/stable
+  ignore_errors: yes
+
+- name: Update helm repos
+  become: true
+  command: helm repo update
+  ignore_errors: yes
+
+- name: Install prometheus
+  ansible.builtin.shell: |
+    helm install prometheus prometheus-community/kube-prometheus-stack
+  environment:
+    KUBECONFIG: /home/jonas/.kube/config
+  register: prometheus_install_result
+
+- name: Ingress for Prometheus and Grafana
+  shell: |
+    kubectl apply -f - <<EOF
+    apiVersion: networking.istio.io/v1alpha3
+    kind: Gateway
+    metadata:
+      name: grafana-gateway
+      namespace: default
+    spec:
+      selector:
+        istio: ingressgateway # use istio default controller
+      servers:
+      - port:
+          number: 80
+          name: http
+          protocol: HTTP
+        hosts:
+        - "grafana.bauerbrueder.com"
+    ---
+    apiVersion: networking.istio.io/v1alpha3
+    kind: VirtualService
+    metadata:
+      name: grafana
+      namespace: default
+    spec:
+      hosts:
+      - "grafana.bauerbrueder.com"
+      gateways:
+      - grafana-gateway
+      http:
+      - match:
+        - uri:
+            prefix: /
+        route:
+        - destination:
+            host: prometheus-grafana.default.svc.cluster.local
+            port:
+              number: 80
+    EOF
